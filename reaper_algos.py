@@ -1,14 +1,5 @@
-import os
+# coding: utf8
 import numpy as np
-import matplotlib.pyplot as plt
-from termcolor import colored
-import time
-from itertools import islice
-
-
-def unit_vector(vector):
-    """ Normalises a vector  """
-    return vector / np.linalg.norm(vector)
 
 def sampling_ratios(N_in, d, N_out, D):
     print "Inlier sampling ratio =", float(N_in) / d
@@ -18,11 +9,11 @@ def sampling_ratios(N_in, d, N_out, D):
 
 def weights_update(X, P, delta):
     """ Updates the weights according to the rule in Algo 4.2 """
-    weights = np.ones(X.shape[0])
-
-    for i in range(len(weights)):
+    n, D = X.shape # Number of points and number of features
+    weights = np.ones(n)
+    for i in range(n):
+        #print delta, np.linalg.norm(X[i, :] - np.dot(P, X[i, :]))
         weights[i] = 1.0 / max(delta, np.linalg.norm(X[i, :] - np.dot(P, X[i, :])))
-
     return weights
 
 # X.shape[0] is just under the assumption that the vectors will be in rows of the matrix
@@ -32,59 +23,68 @@ def weights_update(X, P, delta):
 
 def weighted_least_squares(X, weights, dim):
     # Create the weighted covariance matrix
-    C = np.zeros((X.shape[1], X.shape[1]))
-    for i in range(X.shape[0]):
+    n, D = X.shape # Number of points and number of features
+    d = np.floor(dim).astype('int')
+    C = np.zeros((D, D))
+    eta = np.zeros(D)
+    # Compute Covariance matrix
+    for i in range(n):
         C += weights[i] * np.outer(X[i, :], X[i, :])
-
-    U, S, V = np.linalg.svd(C)
-    eta = np.zeros(X.shape[1])
-    Srank = len(np.nonzero(S)[0])
-
-    if np.allclose(S[int(np.floor(dim))], 0.0):
-        for i in range(np.floor(dim)):
+    # Compute Eigenvalues
+    S, U = np.linalg.eigh(C)
+    # Resort eigenvalues to be non-increasing
+    idx = S.argsort()[::-1]
+    S = S[idx]
+    U = U[:,idx]
+    #Srank = len(np.nonzero(S)[0])
+    # print "The last singular value S[d] = ", S[d]
+    if S[d] == 0:
+        # Setting eta for i < np.fooor(dim)
+        for i in range(d):
             eta[i] = 1.0
-        eta[i + 1] = dim - np.floor(dim)
+        # Setting eta for np.fooor(dim) + 1
+        eta[d + 1] = dim - d
     else:
-        for i in range(int(np.floor(dim)), len(eta)):
-            # what if one of S[i]s is = 0?
-            theta = (i - np.floor(dim)) / sum(S[:i] ** (-1) )
-            if S[i] > theta and theta >= S[i + 1] or (i + 1) > Srank:
+        for i in range(d, D):
+            theta = ((i + 1) - dim) / np.sum(S[:i] ** (-1) )
+            print theta
+            if i+1 >= D or (S[i] > theta and theta >= S[i + 1]):
                 break
-        for i in range(len(eta)):
+        for i in range(D):
             if S[i] > theta:
                 eta[i] = 1 - theta / S[i]
-    # import pdb; pdb.set_trace()
-    P = np.dot(U, np.dot(np.diag(eta), V))
+    # print "Eigenvalues: ", S
+    # print "Eta: ", eta
+    # import pdb
+    # pdb.set_trace()
+    P = np.dot(U, np.dot(np.diag(eta), U.T))
     return P
 
 def IRLS(X, d, delta, epsilon, spherical = "False"):
-
+    n, D = X.shape # Number of points and number of features
     if spherical == "True":
-        for i in range(X.shape[0]):
+        for i in range(n):
             X[i, :] /= np.linalg.norm(X[i, :])
-        print "hm?"
+        print "Made data spherical..."
     error = {}
-    weights = np.ones(X.shape[0])
+    weights = np.ones(n)
     flag = "Failure"
     cnt = 0
     max_iterations = 1000
     error[cnt] = np.inf
-    print "flag"
 
     while cnt < max_iterations:
         cnt += 1
         P = weighted_least_squares(X, weights, d)
         error[cnt] = 0
 
-        for i in range(X.shape[0]):
+        for i in range(n):
             error[cnt] += weights[i] * np.linalg.norm(X[i, :] - np.dot(P, X[i, :])) ** 2
-
-        if error[cnt] > error[cnt - 1] - epsilon:
-            print error[cnt]
-            print error[cnt - 1]
+        print np.abs(error[cnt] - error[cnt-1])
+        if np.abs(error[cnt]-error[cnt - 1]) < 10e-12:
+            print error
             flag = "Success"
             break
-
         weights = weights_update(X, P, delta)
     if flag == "Failure":
         print flag
