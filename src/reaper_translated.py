@@ -42,14 +42,15 @@ def irls_procedure(X, weights, d):
         alpha = np.sqrt(np.sum(np.square(Q.dot(X.T)), axis = 0))
         return Q, alpha
 
-def reaper_matlab(X, d, P_init = None, spherical = "False"):
+def reaper_matlab(X, d, P_init = None, spherical = "False", verbose = False):
     n, D = X.shape # Number of points and number of features
     dim = np.floor(d).astype('int')
     alpha_old = np.ones(n) * np.inf
     if spherical == "True":
         for i in range(n):
             X[i, :] /= np.linalg.norm(X[i, :])
-        print "Made data spherical..."
+        if verbose:
+            print "Made data spherical..."
     if P_init is not None:
         Q = np.eye(P_init.shape) - P
     else:
@@ -59,10 +60,13 @@ def reaper_matlab(X, d, P_init = None, spherical = "False"):
         weights = weights_update(X, Q, __delta_reaper__)
         Q, alpha = irls_procedure(X, weights, d)
         if all(alpha - alpha_old) < __eps_reaper__:
-            print "Converged to solution"
-            return np.eye(D) - Q
-        print "Ctr: {0} : Max error : {1}".format(ctr, np.max(alpha-alpha_old))
+            if verbose:
+                print "Converged to solution"
+                return np.eye(D) - Q
+        if verbose:
+            print "Ctr: {0} : Max error : {1}".format(ctr, np.max(alpha-alpha_old))
         ctr += 1
         alpha_old = alpha
-    print "Not reached convergence"
+    else:
+        print "Not reached convergence"
     return np.eye(D) - Q
